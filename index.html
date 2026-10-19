@@ -1,0 +1,612 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Loopa — Your community</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+:root {
+  --bg:#202127;--panel:#292a32;--panel2:#343540;
+  --line:#41424d;--text:#f4f3fa;--muted:#a5a5b5;
+  --purple:#8b5cf6;--green:#45c486;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px system-ui,Segoe UI,sans-serif;height:100vh}
+button,input{font:inherit}
+button{cursor:pointer;border:0;color:inherit}
+button:disabled{opacity:.5;cursor:not-allowed}
+input{color:white;background:#202127;border:1px solid var(--line);padding:11px;border-radius:8px;width:100%;outline:none}
+input:focus{border-color:var(--purple)}
+button.primary{background:var(--purple);padding:10px 15px;border-radius:8px;font-weight:700}
+button.primary:hover{background:#7547e8}
+button.secondary{background:var(--panel2);padding:10px 15px;border-radius:8px}
+#auth{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.auth-card{background:var(--panel);padding:30px;border:1px solid var(--line);border-radius:18px;width:min(420px,100%)}
+.logo{width:48px;height:48px;display:grid;place-items:center;border-radius:15px;background:var(--purple);font-size:27px;font-weight:900}
+.auth-card h1{margin:14px 0 4px}
+.muted{color:var(--muted);font-size:13px}
+.field{margin:14px 0}
+.field label{display:block;margin-bottom:6px;font-size:13px}
+.auth-buttons{display:flex;gap:9px;margin-top:18px}
+.auth-buttons button{flex:1}
+.divider{display:flex;align-items:center;gap:12px;margin:18px 0;color:var(--muted);font-size:12px}
+.divider:before,.divider:after{content:"";height:1px;background:var(--line);flex:1}
+#googleBtn{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;margin-top:4px}
+#authError{color:#ff8585;white-space:pre-wrap;font-size:13px;margin-top:12px}
+#app{height:100vh;display:none;grid-template-columns:70px 220px minmax(0,1fr)}
+.servers{background:#191a20;display:flex;align-items:center;flex-direction:column;gap:12px;padding:13px 9px}
+.server{width:47px;height:47px;border-radius:16px;background:var(--panel2);font-size:19px;font-weight:800}
+.server.active,.server:first-child{background:var(--purple);border-radius:13px}
+.side{background:var(--panel);display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--line)}
+.workspace{padding:19px 14px;font-weight:800;border-bottom:1px solid var(--line)}
+.channels{padding:14px 9px;flex:1;overflow:auto}
+.label{font-size:11px;color:var(--muted);font-weight:800;letter-spacing:.08em;margin:12px 8px}
+.channel{display:block;text-align:left;width:100%;padding:10px;border-radius:7px;background:transparent;color:var(--muted);margin:3px 0}
+.channel:hover,.channel.active{background:#41404d;color:white}
+.profile{padding:12px;background:#22232a;display:flex;align-items:center;gap:9px}
+.avatar{background:linear-gradient(135deg,#8b5cf6,#4f46e5);width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-weight:800;flex-shrink:0}
+.profile-name{font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis}
+.profile-status{font-size:11px;color:var(--green)}
+.profile button{margin-left:auto;background:transparent;color:var(--muted)}
+.chat{min-width:0;display:flex;flex-direction:column}
+.top{height:62px;padding:0 20px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line)}
+.top h2{font-size:16px;margin:0}
+.top .muted{margin-left:auto}
+#messages{padding:20px;flex:1;overflow:auto}
+.welcome{padding:16px 0 23px;border-bottom:1px solid var(--line);margin-bottom:20px}
+.welcome h2{margin:0 0 5px;font-size:24px}
+.welcome p{margin:0;color:var(--muted)}
+.message{display:flex;gap:11px;margin:20px 0}
+.message .avatar{width:38px;height:38px}
+.message-content{min-width:0;overflow-wrap:anywhere}
+.message-head{display:flex;gap:10px;align-items:baseline}
+.message-head strong{font-size:14px}
+.time{font-size:11px;color:var(--muted)}
+.message-text{white-space:pre-wrap;margin-top:4px}
+.composer-wrap{padding:0 20px 16px}
+.composer{background:#363741;border-radius:10px;padding:9px;display:flex;align-items:center;gap:9px}
+.composer input{border:0;background:transparent;flex:1;min-width:0}
+#notice{position:fixed;bottom:20px;right:20px;max-width:360px;background:#17181e;border:1px solid var(--line);padding:13px 16px;border-radius:10px;display:none;z-index:5;white-space:pre-wrap}
+@media(max-width:650px){
+  #app{grid-template-columns:55px minmax(0,1fr)}
+  .servers{padding:10px 5px}
+  .server{width:40px;height:40px}
+  .side{display:none}
+  .top{padding:0 12px}
+  .top .muted{display:none}
+  #messages{padding:14px}
+  .composer-wrap{padding:0 10px 12px}
+}
+</style>
+</head>
+
+<body>
+<section id="auth">
+  <div class="auth-card">
+    <div class="logo">L</div>
+    <h1>Welcome to Loopa</h1>
+    <div class="muted">Your people. Your conversations.</div>
+
+    <form id="authForm">
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" type="email" required autocomplete="email" placeholder="you@example.com">
+      </div>
+
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" type="password" required minlength="6" autocomplete="current-password" placeholder="At least 6 characters">
+      </div>
+
+      <div class="field" id="usernameField" hidden>
+        <label for="username">Username</label>
+        <input id="username" maxlength="24" placeholder="Your display name">
+      </div>
+
+      <div class="auth-buttons">
+        <button class="primary" id="loginBtn" type="button">Log in</button>
+        <button class="secondary" id="signupBtn" type="button">Sign up</button>
+      </div>
+    </form>
+
+    <div class="divider">OR</div>
+
+    <button class="secondary" id="googleBtn" type="button">
+      <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true">
+        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 3.2 13.22l7.98 6.19C13.07 13.72 18.08 9.5 24 9.5z"/>
+        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.76 7.18l7.73 6C44.42 37.98 46.98 31.84 46.98 24.55z"/>
+        <path fill="#FBBC05" d="M11.18 28.59A14.4 14.4 0 0 1 10.4 24c0-1.59.27-3.13.76-4.59L3.2 13.22A23.9 23.9 0 0 0 0 24c0 3.87.93 7.53 3.2 10.78l7.98-6.19z"/>
+        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.91-5.8l-7.73-6c-2.14 1.44-4.88 2.3-8.18 2.3-5.92 0-10.93-4.22-12.82-9.91L3.2 34.78C6.51 42.62 14.62 48 24 48z"/>
+      </svg>
+      Continue with Google
+    </button>
+
+    <div id="authError" role="status"></div>
+    <p class="muted">By signing up, you agree to use Loopa respectfully.</p>
+  </div>
+</section>
+
+<div id="app">
+  <aside class="servers">
+    <button class="server active" title="Loopa">L</button>
+  </aside>
+
+  <aside class="side">
+    <div class="workspace">◉ Loopa <span class="muted">⌄</span></div>
+    <div class="channels">
+      <div class="label">TEXT CHANNELS</div>
+      <div id="channelList"></div>
+    </div>
+    <div class="profile">
+      <div class="avatar" id="profileAvatar">L</div>
+      <div style="min-width:0">
+        <div class="profile-name" id="profileName">Loading...</div>
+        <div class="profile-status">● Online</div>
+      </div>
+      <button id="logoutBtn" title="Log out">⇥</button>
+    </div>
+  </aside>
+
+  <main class="chat">
+    <header class="top">
+      <span style="font-size:22px;color:var(--muted)">#</span>
+      <h2 id="channelTitle">general</h2>
+      <span class="muted">Loopa community</span>
+    </header>
+
+    <section id="messages">
+      <div class="welcome">
+        <h2>Welcome to Loopa 💜</h2>
+        <p>You're in the right place to start a conversation.</p>
+      </div>
+      <div id="messageList"></div>
+    </section>
+
+    <div class="composer-wrap">
+      <form class="composer" id="messageForm">
+        <input id="messageInput" maxlength="4000" placeholder="Message #general..." autocomplete="off" required>
+        <button class="primary" id="sendBtn">Send ↗</button>
+      </form>
+      <p class="muted">Messages are shared with authenticated members of this channel.</p>
+    </div>
+  </main>
+</div>
+
+<div id="notice" role="status"></div>
+
+<script>
+const SUPABASE_URL = "https://dkxtbcmfwvrfmjlwvaag.supabase.co";
+const SUPABASE_KEY = "sb_publishable_HlWeOFI1_HqDFLVrPfyodA_UMzB88FQ";
+
+let sb = null;
+let currentUser = null;
+let currentProfile = null;
+let currentChannel = null;
+let realtimeChannel = null;
+let channels = [];
+let busy = false;
+
+const $ = id => document.getElementById(id);
+
+function notice(message) {
+  const el = $("notice");
+  el.textContent = message;
+  el.style.display = "block";
+  clearTimeout(notice.timer);
+  notice.timer = setTimeout(() => el.style.display = "none", 4000);
+}
+
+function setAuthError(message) {
+  $("authError").textContent = message || "";
+}
+
+function friendlyError(error) {
+  const msg = error?.message || String(error);
+
+  if (/Invalid login credentials/i.test(msg))
+    return "Email or password is incorrect.";
+
+  if (/Email not confirmed/i.test(msg))
+    return "Check your email and confirm your account before logging in.";
+
+  if (/Failed to fetch/i.test(msg))
+    return "Could not reach Supabase. Check your project URL and internet connection.";
+
+  if (/provider is not enabled|Unsupported provider/i.test(msg))
+    return "Google login is not enabled yet. Enable Google in your Supabase Auth providers.";
+
+  return msg;
+}
+
+function setBusy(value) {
+  busy = value;
+  $("loginBtn").disabled = value;
+  $("signupBtn").disabled = value;
+  $("googleBtn").disabled = value;
+  $("sendBtn").disabled = value;
+}
+
+function validateConfig() {
+  if (!SUPABASE_URL.startsWith("https://") ||
+      !SUPABASE_KEY ||
+      SUPABASE_URL.includes("YOUR_SUPABASE") ||
+      SUPABASE_KEY.includes("YOUR_SUPABASE")) {
+    setAuthError("Check your Supabase project URL and publishable key in the HTML.");
+    return false;
+  }
+  return true;
+}
+
+/* EMAIL SIGN-UP */
+async function signUp() {
+  if (busy || !validateConfig()) return;
+
+  const email = $("email").value.trim();
+  const password = $("password").value;
+  const username = $("username").value.trim();
+
+  if (!username || !/^[a-zA-Z0-9_ -]{2,24}$/.test(username)) {
+    setAuthError("Enter a username with 2–24 letters, numbers, spaces, underscores or hyphens.");
+    return;
+  }
+
+  setBusy(true);
+  setAuthError("");
+
+  try {
+    const {data, error} = await sb.auth.signUp({
+      email,
+      password,
+      options: {data: {username}}
+    });
+
+    if (error) throw error;
+
+    if (data.session) {
+      await enterApp(data.user);
+    } else {
+      setAuthError("Check your email to confirm your account, then log in.");
+    }
+  } catch (e) {
+    setAuthError(friendlyError(e));
+  } finally {
+    setBusy(false);
+  }
+}
+
+/* EMAIL LOGIN */
+async function login() {
+  if (busy || !validateConfig()) return;
+
+  setBusy(true);
+  setAuthError("");
+
+  try {
+    const {data, error} = await sb.auth.signInWithPassword({
+      email: $("email").value.trim(),
+      password: $("password").value
+    });
+
+    if (error) throw error;
+    await enterApp(data.user);
+  } catch (e) {
+    setAuthError(friendlyError(e));
+  } finally {
+    setBusy(false);
+  }
+}
+
+/* GOOGLE LOGIN */
+async function loginWithGoogle() {
+  if (busy || !validateConfig()) return;
+
+  setBusy(true);
+  setAuthError("");
+
+  try {
+    const {error} = await sb.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: window.location.origin + window.location.pathname
+      }
+    });
+
+    if (error) throw error;
+    // Supabase redirects the browser to Google.
+  } catch (e) {
+    setAuthError(friendlyError(e));
+    setBusy(false);
+  }
+}
+
+/* LOAD USER PROFILE */
+async function enterApp(user) {
+  currentUser = user;
+  $("auth").style.display = "none";
+  $("app").style.display = "grid";
+
+  const fallback =
+    user.user_metadata?.username ||
+    user.user_metadata?.full_name ||
+    user.email?.split("@")[0] ||
+    "Member";
+
+  try {
+    const {data: profile, error} = await sb
+      .from("profiles")
+      .select("id,username,avatar_url,status")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (profile) {
+      currentProfile = profile;
+    } else {
+      const {data, error: insertError} = await sb
+        .from("profiles")
+        .insert({id: user.id, username: fallback.slice(0,24)})
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+      currentProfile = data;
+    }
+
+    $("profileName").textContent = currentProfile.username;
+    $("profileAvatar").textContent =
+      currentProfile.username.slice(0,1).toUpperCase();
+
+    await loadChannels();
+  } catch (e) {
+    notice("Profile setup failed: " + friendlyError(e));
+  }
+}
+
+/* LOAD CHANNELS */
+async function loadChannels() {
+  const {data, error} = await sb
+    .from("channels")
+    .select("id,name")
+    .order("name");
+
+  if (error) throw error;
+  channels = data || [];
+  $("channelList").replaceChildren();
+
+  if (!channels.length) {
+    notice("No channels found. Run the Loopa database setup SQL first.");
+    return;
+  }
+
+  channels.forEach(channel => {
+    const button = document.createElement("button");
+    button.className = "channel";
+    button.textContent = "#  " + channel.name;
+    button.dataset.id = channel.id;
+    button.onclick = () => selectChannel(channel);
+    $("channelList").appendChild(button);
+  });
+
+  await selectChannel(channels.find(c => c.name === "general") || channels[0]);
+}
+
+/* SELECT CHANNEL */
+async function selectChannel(channel) {
+  currentChannel = channel;
+  $("channelTitle").textContent = channel.name;
+  $("messageInput").placeholder = "Message #" + channel.name + "...";
+
+  document.querySelectorAll(".channel").forEach(button => {
+    button.classList.toggle("active", button.dataset.id === channel.id);
+  });
+
+  if (realtimeChannel) {
+    await sb.removeChannel(realtimeChannel);
+    realtimeChannel = null;
+  }
+
+  $("messageList").replaceChildren();
+
+  try {
+    await loadMessages();
+
+    const selectedChannelId = channel.id;
+
+    realtimeChannel = sb.channel("loopa-messages-" + selectedChannelId)
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "messages",
+        filter: "channel_id=eq." + selectedChannelId
+      }, payload => {
+        if (currentChannel?.id === selectedChannelId &&
+            !$("message-" + payload.new.id)) {
+          renderMessage(payload.new);
+        }
+      })
+      .subscribe(status => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          notice("Live updates disconnected. Check Supabase Realtime settings.");
+        }
+      });
+  } catch (e) {
+    notice("Could not load messages: " + friendlyError(e));
+  }
+}
+
+/* LOAD MESSAGES */
+async function loadMessages() {
+  const {data, error} = await sb
+    .from("messages")
+    .select("id,channel_id,user_id,content,created_at,profiles(username)")
+    .eq("channel_id", currentChannel.id)
+    .order("created_at", {ascending:true})
+    .limit(100);
+
+  if (error) throw error;
+
+  $("messageList").replaceChildren();
+  (data || []).forEach(renderMessage);
+  scrollToBottom();
+}
+
+/* DISPLAY MESSAGE */
+function renderMessage(message) {
+  if ($("message-" + message.id)) return;
+
+  const profile = message.profiles;
+  const name = profile?.username ||
+    (message.user_id === currentUser?.id
+      ? currentProfile?.username : "Member") || "Member";
+
+  const article = document.createElement("article");
+  article.className = "message";
+  article.id = "message-" + message.id;
+
+  const avatar = document.createElement("div");
+  avatar.className = "avatar";
+  avatar.textContent = name.slice(0,1).toUpperCase();
+
+  const content = document.createElement("div");
+  content.className = "message-content";
+
+  const head = document.createElement("div");
+  head.className = "message-head";
+
+  const strong = document.createElement("strong");
+  strong.textContent = name;
+
+  const time = document.createElement("span");
+  time.className = "time";
+
+  const date = new Date(message.created_at);
+  time.textContent = Number.isNaN(date.getTime())
+    ? ""
+    : date.toLocaleString([], {dateStyle:"short",timeStyle:"short"});
+
+  const text = document.createElement("div");
+  text.className = "message-text";
+  text.textContent = message.content;
+
+  head.append(strong, time);
+  content.append(head, text);
+  article.append(avatar, content);
+  $("messageList").appendChild(article);
+}
+
+function scrollToBottom() {
+  $("messages").scrollTop = $("messages").scrollHeight;
+}
+
+/* SEND MESSAGE */
+$("messageForm").addEventListener("submit", async event => {
+  event.preventDefault();
+
+  if (busy || !currentUser || !currentChannel) return;
+
+  const input = $("messageInput");
+  const content = input.value.trim();
+  if (!content) return;
+
+  setBusy(true);
+
+  try {
+    const {data, error} = await sb
+      .from("messages")
+      .insert({
+        channel_id: currentChannel.id,
+        user_id: currentUser.id,
+        content
+      })
+      .select("id,channel_id,user_id,content,created_at")
+      .single();
+
+    if (error) throw error;
+
+    input.value = "";
+    renderMessage({...data, profiles:{username:currentProfile.username}});
+    scrollToBottom();
+  } catch (e) {
+    notice("Message failed: " + friendlyError(e));
+  } finally {
+    setBusy(false);
+    input.focus();
+  }
+});
+
+/* BUTTONS */
+$("loginBtn").onclick = login;
+$("googleBtn").onclick = loginWithGoogle;
+
+$("signupBtn").onclick = () => {
+  const field = $("usernameField");
+  field.hidden = !field.hidden;
+
+  if (!field.hidden) {
+    $("username").focus();
+    setAuthError("Choose a username, then press Sign up again.");
+    $("signupBtn").textContent = "Create account";
+    $("signupBtn").onclick = signUp;
+  } else {
+    $("signupBtn").textContent = "Sign up";
+    $("signupBtn").onclick = () => {
+      field.hidden = false;
+      $("username").focus();
+    };
+  }
+};
+
+$("logoutBtn").onclick = async () => {
+  const {error} = await sb.auth.signOut();
+
+  if (error) {
+    notice(friendlyError(error));
+    return;
+  }
+
+  if (realtimeChannel) await sb.removeChannel(realtimeChannel);
+
+  currentUser = null;
+  currentProfile = null;
+  currentChannel = null;
+
+  $("app").style.display = "none";
+  $("auth").style.display = "flex";
+  setAuthError("");
+};
+
+/* START APP AND RESTORE LOGIN AFTER GOOGLE REDIRECT */
+async function start() {
+  if (!validateConfig()) return;
+
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  sb.auth.onAuthStateChange((event, session) => {
+    if (event === "SIGNED_OUT") {
+      currentUser = null;
+      currentProfile = null;
+      $("app").style.display = "none";
+      $("auth").style.display = "flex";
+    }
+  });
+
+  try {
+    const {data, error} = await sb.auth.getSession();
+    if (error) throw error;
+
+    if (data.session) {
+      await enterApp(data.session.user);
+    }
+  } catch (e) {
+    setAuthError(friendlyError(e));
+  }
+}
+
+start();
+</script>
+</body>
+</html>
